@@ -48,7 +48,7 @@ export default function FirewallDemo() {
     setResult(null)
 
     try {
-      const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+      const baseUrl = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
       const response = await fetch(`${baseUrl}/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,7 +144,7 @@ export default function FirewallDemo() {
               </button>
               <button className="fd-clear" disabled={busy || !content} onClick={() => { setContent(''); setResult(null); setError('') }}>Clear</button>
             </div>
-            {error && <div className="fd-error" role="alert"><X size={16} /><span><b>Security engine unavailable</b><small>{error} Confirm the backend is running at {import.meta.env.VITE_API_URL || 'http://localhost:8000'}.</small></span></div>}
+            {error && <div className="fd-error" role="alert"><X size={16} /><span><b>Security engine unavailable</b><small>{error} Confirm the backend is running at {import.meta.env.VITE_API_URL || '/api'}.</small></span></div>}
           </section>
 
           <section className="fd-card fd-verdict-card" aria-live="polite">

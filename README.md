@@ -25,7 +25,7 @@ cd backend
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8003
 ```
 
 **macOS / Linux**
@@ -35,10 +35,10 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8003
 ```
 
-The API is at `http://localhost:8000`; interactive docs are at `http://localhost:8000/docs`.
+The API is at `http://localhost:8003`; interactive docs are at `http://localhost:8003/docs`.
 
 ### 2. Start the frontend
 
@@ -48,9 +48,21 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (normally `http://localhost:5173`). To set a different backend URL, set `VITE_API_URL` before starting Vite, for example `VITE_API_URL=http://localhost:8000` (PowerShell: `$env:VITE_API_URL="http://localhost:8000"`).
+Open the URL Vite prints (normally `http://localhost:5173`). The development proxy sends `/api` requests to the local backend on port `8003`.
 
 Build the production frontend with `npm run build` from `frontend/`.
+
+## LOCAL NETWORK DEMO
+
+This exposes the development app only to devices on your local network; it does not make Workex public or internet-accessible.
+
+1. Connect the demo devices to the same Wi-Fi network.
+2. Start the backend from `backend/` with `uvicorn main:app --reload --host 0.0.0.0 --port 8003`.
+3. Start the frontend from `frontend/` with `npm run dev -- --host 0.0.0.0 --port 5173`. Vite proxies `/api` to the backend on the laptop, so client devices use the same frontend URL and no API key is sent to the browser.
+4. Find the laptop's local IPv4 address (`ipconfig` on Windows; `ip -4 addr` on Linux, or Network settings on macOS).
+5. On another device, open `http://<LAPTOP-IP>:5173`.
+
+Windows Firewall may need to allow inbound connections to the frontend port `5173` and backend port `8003`. Keep `GEMINI_API_KEY` in `backend/.env`; never put it in frontend configuration.
 
 ## Batch Scan
 
