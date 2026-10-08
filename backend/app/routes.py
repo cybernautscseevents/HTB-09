@@ -1,13 +1,14 @@
+import json
 from io import BytesIO
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pypdf import PdfReader
 from docx import Document
-from app.models import BatchScanRequest, ScanRequest, ScanResponse, ChatRequest
-from app.engine import scan
+from app.models import BatchScanRequest, ScanRequest, ScanResponse, ChatRequest, validate_policy_settings
+from app.engine import scan, scan_generated_output
 from app.gemini_service import GeminiServiceError, generate_response, get_model_name
 from app.security_classifier import SecurityClassifierError, classify_security_input
 
@@ -78,8 +79,17 @@ def extract_document_text(filename: str, file_bytes: bytes) -> str:
 
 
 @router.post("/scan-document")
-async def scan_document(file: UploadFile = File(...)):
+async def scan_document(file: UploadFile = File(...), policies: str = Form("{}")):
     """Extract and scan an uploaded document using the existing local Workex engine."""
+    try:
+        parsed_policies = json.loads(policies)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="Policies must be a JSON object of supported boolean settings.") from exc
+    try:
+        parsed_policies = validate_policy_settings(parsed_policies)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     filename = Path(file.filename or "").name
     suffix = Path(filename).suffix.lower()
     if suffix not in DOCUMENT_TYPES:
@@ -101,7 +111,7 @@ async def scan_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail="No readable text was found in the document.")
     if len(extracted) > MAX_DOCUMENT_CHARACTERS:
         raise HTTPException(status_code=413, detail="Extracted text exceeds the 50,000 character scan limit.")
-    result = scan(extracted, "document")
+    result = scan(extracted, "document", parsed_policies)
     return {
         "filename": filename,
         "file_type": suffix[1:],
@@ -278,6 +288,24 @@ def chat(request: ChatRequest):
                 "security_assessment": assessment,
                 "model": model_result,
             },
+        )
+
+    if not isinstance(response, str) or not response.strip():
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Generated response was withheld because it was empty or invalid."},
+        )
+    try:
+        output_check = scan_generated_output(response)
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Generated response was withheld because output security checks were unavailable."},
+        )
+    if not isinstance(output_check, dict) or output_check.get("safe") is not True:
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Generated response was withheld by Workex output security checks."},
         )
 
     model_result.update(called=True, response=response)

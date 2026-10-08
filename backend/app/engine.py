@@ -151,8 +151,29 @@ def _compact(text: str) -> str:
 
 def _strip_discussion(text: str) -> str:
     result = text
+
+    def keep_if_attack(match: re.Match) -> str:
+        # An educational wrapper must not erase an actionable attack in its clause.
+        # Quoted examples stay exempt, while matching attack language outside quotes
+        # remains visible to the normal detector.
+        clause = re.sub(
+            r'''(?:"[^"\n]*"|(?<!\w)'[^'\n]*'(?!\w)|“[^”\n]*”|‘[^’\n]*’)''',
+            " ",
+            match.group(0),
+        )
+        for signal in PATTERNS:
+            findings = _matches(signal, clause)
+            if signal == "system_prompt_extraction":
+                findings = [
+                    finding for finding in findings
+                    if not re.match(r"\b(?:can you\s+)?(?:explain|describe|discuss|analy[sz]e|why)\b", finding, re.I)
+                ]
+            if findings:
+                return match.group(0)
+        return " "
+
     for pattern in DISCUSSION_CLAUSES:
-        result = pattern.sub(" ", result)
+        result = pattern.sub(keep_if_attack, result)
     return result
 
 
@@ -363,8 +384,48 @@ def scan(content: str, input_type: str = "prompt", policies: dict[str, bool] | N
         "severity": severity,
         "action": action,
         "reasons": reasons,
-        "sanitized_content": sanitized_content if sensitive_change else None,
+        # A blocked input has no safe-to-forward sanitized variant; do not expose
+        # residual attack instructions as though sanitization made them safe.
+        "sanitized_content": sanitized_content if sensitive_change and action != "BLOCK" else None,
         "detections": detections,
         "risk_breakdown": breakdown,
         "explanation": explanation,
     }
+
+
+def scan_generated_output(content: str) -> dict:
+    """Check model output with mandatory policies and output-relevant signals only."""
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("Generated output is empty or invalid.")
+
+    result = scan(
+        content,
+        input_type="prompt",
+        policies={
+            "prompt_injection": True,
+            "indirect_injection": True,
+            "jailbreak": True,
+            "pii": True,
+            "secrets": True,
+            "sanitization": True,
+        },
+    )
+    # Indirect-injection checks are for external documents, and social-engineering
+    # signals describe incoming requests. Generated output is checked for direct
+    # unsafe instructions and sensitive-data disclosure instead.
+    output_signals = {
+        "instruction_override",
+        "system_prompt_extraction",
+        "role_manipulation",
+        "jailbreak",
+        "sensitive_information",
+        "unauthorized_data_request",
+        "external_destination",
+        "obfuscation",
+    }
+    detected = [
+        row["signal"]
+        for row in result["risk_breakdown"]
+        if row["signal"] in output_signals and row["detected"]
+    ]
+    return {"safe": not detected, "detected_signals": detected}

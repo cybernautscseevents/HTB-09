@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Download, FileText, ListChecks, Search, ShieldAlert, ShieldCheck, Upload, X } from 'lucide-react'
+import { readJsonResponse, requireScanResult } from './api-response.js'
 import './batch-scan.css'
 
 type Action = 'ALLOW' | 'SANITIZE' | 'BLOCK'
@@ -197,9 +198,14 @@ export default function BatchScan({ policy }: { policy: Record<string, boolean> 
       for (let start = 0; start < input.length; start += CHUNK_SIZE) {
         const chunk = input.slice(start, start + CHUNK_SIZE)
         const response = await fetch(`${API}/scan/batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: chunk, policies: policy }) })
-        if (!response.ok) throw new Error(`Security engine returned HTTP ${response.status}.`)
-        const data = await response.json() as { results: ResultItem[] }
-        collected.push(...data.results)
+        const data = await readJsonResponse(response, 'Batch security scan')
+        if (!Array.isArray(data.results) || data.results.length !== chunk.length) throw new Error('The batch security service returned an incomplete result set.')
+        const chunkResults = data.results.map((value, index) => {
+          const result = requireScanResult(value, 'Batch security service') as unknown as ResultItem
+          if (typeof result.id !== 'string' || typeof result.content !== 'string' || result.id !== chunk[index].id) throw new Error('The batch security service returned an incomplete result set.')
+          return result
+        })
+        collected.push(...chunkResults)
         setProgress({ done: collected.length, total: input.length })
       }
       setResults(collected); setSummary(summarize(collected))
