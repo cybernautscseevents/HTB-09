@@ -68,3 +68,5 @@ button:focus-visible,a:focus-visible,textarea:focus-visible,select:focus-visible
 /* Product typography and LAN demo status */
 body{font-weight:450}.brand b{font-weight:760}.nav{font-weight:620}.page-head h1{font-weight:660}.panel-head h3,.pipeline h3{font-weight:650}.hero h2{font-weight:620}.result-heading label,.result-section-title,.decision strong,.local-engine-label{font-weight:750}.lan-indicator{display:inline-flex;align-items:center;gap:5px;color:#a6bc91!important;font-size:8px!important;font-weight:700;letter-spacing:.65px;white-space:nowrap}.lan-indicator em{width:5px;height:5px;margin:0;background:#91b779}
 @media(max-width:720px){.lan-indicator{display:none!important}}
+.mobile-brand-mark{display:none}
+@media(max-width:720px){.mobile-brand-mark{display:block;width:27px;height:27px;flex:0 0 27px;object-fit:contain}}
