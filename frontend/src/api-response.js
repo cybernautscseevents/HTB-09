@@ -1,6 +1,6 @@
 const ACTIONS = new Set(['ALLOW', 'SANITIZE', 'BLOCK'])
 
-export async function readJsonResponse(response, label) {
+export async function readJsonResponse(response, label, options = {}) {
   const body = await response.text()
   let data = null
   let parseFailed = false
@@ -17,6 +17,7 @@ export async function readJsonResponse(response, label) {
 
   if (!response.ok) {
     const detail = typeof data?.detail === 'string' ? data.detail : null
+    if (options.allowHttpErrorPayload && data) return data
     const status = `${label} failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`
     throw new Error(detail || `${status}${parseFailed ? ' The server returned an unreadable response.' : !body.trim() ? ' The server returned an empty response.' : ''}`)
   }

@@ -24,6 +24,19 @@ test('reports HTTP errors with a server detail when available', async () => {
   await assert.rejects(readJsonResponse(response, 'Document scan'), /Invalid policy/)
 })
 
+test('can return a structured HTTP error payload when the caller must inspect a partial result', async () => {
+  const payload = { blocked: false, security: validVerdict, model: { called: true, error: 'Model unavailable' } }
+  const body = JSON.stringify(payload)
+  const response = new Response(body, { status: 503, statusText: 'Service Unavailable' })
+  assert.deepEqual(await readJsonResponse(response, 'Security scan', { allowHttpErrorPayload: true }), payload)
+  await assert.rejects(readJsonResponse(new Response(body, { status: 503 }), 'Security scan'), /HTTP 503/)
+})
+
+test('still rejects empty and non-JSON error payloads when partial results are allowed', async () => {
+  await assert.rejects(readJsonResponse(new Response('', { status: 503 }), 'Security scan', { allowHttpErrorPayload: true }), /HTTP 503.*empty response/)
+  await assert.rejects(readJsonResponse(new Response('unavailable', { status: 503 }), 'Security scan', { allowHttpErrorPayload: true }), /HTTP 503.*unreadable response/)
+})
+
 test('reports HTTP errors when the body is empty or unreadable', async () => {
   await assert.rejects(readJsonResponse(new Response('', { status: 503 }), 'Batch scan'), /HTTP 503.*empty response/)
   await assert.rejects(readJsonResponse(new Response('not-json', { status: 502 }), 'Batch scan'), /HTTP 502.*unreadable response/)
